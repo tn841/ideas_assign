@@ -14,4 +14,4 @@ COPY . /ideas_assign
 
 ENTRYPOINT [ "python" ]
 
-CMD [ "run.py" ]
+CMD [ "-u", "run.py" ]
