@@ -10,7 +10,7 @@ class User(db.Model):
     nickname = db.Column(db.String(30), nullable=False)
     password = db.Column(db.String(128), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
-    email = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(100), nullable=False, unique=True)
     gender = db.Column(db.String(1), nullable=True)
 
     def __repr__(self):
@@ -22,7 +22,7 @@ class User(db.Model):
 
 
 class Order(db.Model):
-    orderid = db.Column(db.String(12), primary_key=True, unique=True)
+    orderid = db.Column(db.Integer, primary_key=True, autoincrement=True)
     productname = db.Column(db.String(100), nullable=False)
     transdate = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -31,3 +31,13 @@ class Order(db.Model):
 
     def __repr__(self):
         return '<Order %r>' % self.orderid
+
+
+class Token(db.Model):
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    userid = db.Column(db.Integer)
+    refreshkey = db.Column(db.String(100), nullable=False)
+    createdate = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    def __repr__(self):
+        return '<Token %r>' % self.id

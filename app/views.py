@@ -1,9 +1,12 @@
-import json
+import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .models import User, Order, db
+from .commons.APIResponse import APIResponse
+from .commons.decorators import access_token_required, refresh_token_required
+from .commons.jwt_common import create_jwt_access_token, create_jwt_refresh_token
+from .models import User, Order, db, Token
 
 api_views = Blueprint('api_views', __name__, url_prefix='/api/v1')
 
@@ -23,15 +26,17 @@ def user_register():
     req_data = request.form
 
     if len(set(req_data.keys()).intersection(set(['name', 'nickname', 'password', 'phone', 'email']))) != 5:
-        return jsonify({'msg': '필수파라미터 누락.'}), 200
+        return APIResponse('필수파라미터 누락').json()
 
     if req_data.get('name'):
         # 한글,영문 대소문자 만허용, 20
-        pass
+        if not re.match('^[가-힣a-zA-Z]{0,20}$', req_data.get('name')):
+            return APIResponse('이름이 잘못 되었습니다.').json()
 
     if req_data.get('nickname'):
         # 영문 소문자만 허용, 30
-        pass
+        if not re.match('^[a-z]{0,30}$', req_data.get('nickname')):
+            return APIResponse('닉네임이 잘못 되었습니다.').json()
 
     if req_data.get('password'):
         # 최소 10자 이상, 영문 대소문자, 특수문자, 숫자 각 1개 이상씩 포함
@@ -41,6 +46,8 @@ def user_register():
 
     if req_data.get('phone'):
         # 숫자, 20
+        if not re.match('^[\d]{0,20}$', req_data.get('phone')):
+            return APIResponse('전화번호를 다시 입력하세요.').json()
         pass
 
     if req_data.get('email'):
@@ -51,7 +58,7 @@ def user_register():
                 phone=req_data.get('phone'), email=req_data.get('email'), gender=req_data.get('gender', ''))
     db.session.add(new_user)
     db.session.commit()
-    return jsonify({'data': '{}'.format(new_user)}), 200
+    return APIResponse('success', 200, str(new_user)).json()
 
 
 @api_views.route('/login', methods=['POST'])
@@ -69,25 +76,47 @@ def login_api():
     login_user = User.query.filter_by(email=req_data.get('email')).first()
     print(login_user.password)
     if not check_password_hash(login_user.password, req_data.get('password')):
-        return jsonify({'msg': '비밀번호 오류'})
+        return jsonify({'msg': 'id/pw 오류'})
+
+    a_token = create_jwt_access_token(login_user.id)
+    r_token = create_jwt_refresh_token(login_user.id)
+    print("access_token : {}".format(a_token))
+    print("refresh_token : {}".format(r_token))
+    return APIResponse('success', 200, data={'access_token': a_token, 'refresh_token': r_token}).json()
 
 
-    # todo : access-token, refrest-token 발급
-    return jsonify({'data': '{}'.format(login_user)}), 200
+@api_views.route('/access-token', methods=['GET'])
+@refresh_token_required
+def access_token_api():
+    """
+    refresh으로 access token 재발행
+    :return:
+    """
+    access_token = create_jwt_access_token(g.userid)
+
+    return APIResponse('success', 200, data={'access_token': access_token}).json()
 
 
 @api_views.route('/logout', methods=['POST'])
+@access_token_required
 def logout_api():
     """
     로그아웃
 
     :return:
     """
-    print('{}'.format(request.form))
-    return jsonify(request.form), 200
+    from flask import g
+    print('g.userid : {}'.format(g.userid))
+
+    # User.query.filter_by(id=123).delete()
+    result = Token.query.filter_by(userid=g.userid).delete()
+    print("result : {}".format(result))
+    db.session.commit()
+    return APIResponse('deleted', 200, {'userid': g.userid}).json()
 
 
 @api_views.route('/user/<string:userid>', methods=['GET'])
+# @access_token_required
 def user_api(userid=None):
     if userid:
         print('userid : {}'.format(userid))
@@ -101,6 +130,7 @@ def user_api(userid=None):
 
 
 @api_views.route('/orders/<string:userid>')
+# @access_token_required
 def order_api(userid=None):
     if userid:
         print("userid : {}".format(userid))
@@ -113,8 +143,10 @@ def order_api(userid=None):
 
 
 @api_views.route('/users', methods=['GET'])
+# @access_token_required
 def get_users():
     req_data = request.form
+    print(req_data)
     per_page = 5
     page = 1
     if req_data.get('per_page', None):
@@ -123,31 +155,35 @@ def get_users():
     if req_data.get('page', None):
         page = int(req_data.get('page'))
 
-    query = User.query
+
+    ###
+    last_orders = db.session.query(Order.userid, db.func.max(Order.transdate).label('last_order_date'), Order.productname, Order.orderid)\
+        .group_by(Order.userid).subquery()
+
+    query = User.query.outerjoin(last_orders, User.id == last_orders.c.userid) \
+        .add_columns(User.id, User.name, User.nickname, User.email, last_orders.c.orderid,last_orders.c.last_order_date, last_orders.c.productname)
+
     if req_data.get('name', None):
-        name = req_data.get('name')
-        query.filter(User.name == name)
+        query = query.filter(User.name==req_data.get('name'))
 
     if req_data.get('email', None):
-        email = req_data.get('email')
-        query.filter(User.email == email)
+        query = query.filter(User.email==req_data.get('email'))
 
-    users = User.query.order_by(User.id).all()
+    users = query.paginate(page, per_page, False).items
+    ###
 
-    print('users : {}'.format(users))
     res = {}
     for idx, user in enumerate(users):
         res.update({idx: str(user)})
-
-    # ObjectRes.query.order_by('-id').first()
 
     return jsonify({'msg': 'success', 'users': res})
 
 
 @api_views.route('/order', methods=['POST'])
+# @access_token_required
 def create_order():
-
-    order = Order(productname='productname', userid=1)  # orderid는 12자리, 유니크해야함 => autoincrement = 100000000000 부터 시작
+    req_data = request.form
+    order = Order(productname='productname'+req_data.get('userid'), userid=req_data.get('userid'))  # orderid는 12자리, 유니크해야함 => autoincrement = 100000000000 부터 시작
     db.session.add(order)
     db.session.commit()
 
