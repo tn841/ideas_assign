@@ -1,4 +1,5 @@
 import re
+from random import randrange
 
 from flask import Blueprint, jsonify, request, g
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -205,8 +206,22 @@ def get_users():
 # @access_token_required
 def create_order():
     req_data = request.form
-    order = Order(productname='productname'+req_data.get('userid'), userid=req_data.get('userid'))  # orderid는 12자리, 유니크해야함 => autoincrement = 100000000000 부터 시작
-    db.session.add(order)
-    db.session.commit()
+    print("req_data : {}".format(req_data))
 
-    return jsonify({'msg': 'success', 'data': '{}'.format(order)}), 200
+    # orderid는 12자리, 중복이 불가능한 임의의 영문 대문자, 숫자 조합
+    text = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+    orderid = ''
+    for i in range(12):
+        orderid += text[randrange(36)] # 언젠가는 중복이 발생할 수 있다..
+
+    try:
+        order = Order(orderid=orderid, productname=req_data.get('productname', 'p_name'), userid=req_data.get('userid'))
+        db.session.add(order)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return APIResponse('주문 번호 생성에 실패하였습니다.', 500, e).json()
+
+
+
+    return APIResponse('success', 200, order.as_dict()).json()

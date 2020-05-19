@@ -26,8 +26,9 @@ class User(db.Model):
     def as_dict(self):
         return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
+
 class Order(db.Model):
-    orderid = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    orderid = db.Column(db.String(12), primary_key=True, unique=True)
     productname = db.Column(db.String(100), nullable=False)
     transdate = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
@@ -53,5 +54,3 @@ class Token(db.Model):
 
     def __repr__(self):
         return '<Token %r>' % self.id
-
-
