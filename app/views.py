@@ -135,7 +135,7 @@ def logout_api():
 
 
 @api_views.route('/user/<string:userid>', methods=['GET'])
-# @access_token_required
+@access_token_required
 def user_api(userid=None):
     if userid:
         print('userid : {}'.format(userid))
@@ -151,7 +151,7 @@ def user_api(userid=None):
 
 
 @api_views.route('/orders/<string:userid>')
-# @access_token_required
+@access_token_required
 def order_api(userid=None):
     if userid:
         print("userid : {}".format(userid))
@@ -166,7 +166,7 @@ def order_api(userid=None):
 
 
 @api_views.route('/users', methods=['GET'])
-# @access_token_required
+@access_token_required
 def get_users():
     req_data = request.form
     print(req_data)
@@ -203,7 +203,7 @@ def get_users():
 
 
 @api_views.route('/order', methods=['POST'])
-# @access_token_required
+@access_token_required
 def create_order():
     req_data = request.form
     print("req_data : {}".format(req_data))
