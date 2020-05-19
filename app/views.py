@@ -31,34 +31,44 @@ def user_register():
     if req_data.get('name'):
         # 한글,영문 대소문자 만허용, 20
         if not re.match('^[가-힣a-zA-Z]{0,20}$', req_data.get('name')):
-            return APIResponse('이름이 잘못 되었습니다.').json()
+            return APIResponse('이름 조건 미충족.').json()
 
     if req_data.get('nickname'):
         # 영문 소문자만 허용, 30
         if not re.match('^[a-z]{0,30}$', req_data.get('nickname')):
-            return APIResponse('닉네임이 잘못 되었습니다.').json()
+            return APIResponse('닉네임 조건 미충족.').json()
 
     if req_data.get('password'):
         # 최소 10자 이상, 영문 대소문자, 특수문자, 숫자 각 1개 이상씩 포함
-
-        hashed_passwd = generate_password_hash(req_data.get('password'))
-        pass
+        if re.match(r"^(?=.*[A-Za-z])(?=.*\d)(?=.*[~!@#$%^&?*])[A-Za-z\d~!@#$%^&?*]{10,}$", req_data.get('password')):
+            hashed_passwd = generate_password_hash(req_data.get('password'))
+        else:
+            return APIResponse('비밀번호 조건 미충족.').json()
 
     if req_data.get('phone'):
         # 숫자, 20
         if not re.match('^[\d]{0,20}$', req_data.get('phone')):
-            return APIResponse('전화번호를 다시 입력하세요.').json()
-        pass
+            return APIResponse('전화번호 조건 미충족.').json()
 
     if req_data.get('email'):
         # 이메일형식, 100자
-        pass
+        if not re.match("[\w\-\._]+@[\w\-\._]+\.\w{2,10}", req_data.get('email')):
+            return APIResponse('이메일 조건 미충족.').json()
+    try:
+        new_user = User(name=req_data.get('name'), nickname=req_data.get('nickname'), password=hashed_passwd,
+                    phone=req_data.get('phone'), email=req_data.get('email'), gender=req_data.get('gender', ''))
+        db.session.add(new_user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        if e.orig.args[0] == 1062:
+            return APIResponse('중복된 이메일 입니다.').json()
+        else:
+            return APIResponse('DB에러 입니다.', 500, str(e)).json()
 
-    new_user = User(name=req_data.get('name'), nickname=req_data.get('nickname'), password=hashed_passwd,
-                phone=req_data.get('phone'), email=req_data.get('email'), gender=req_data.get('gender', ''))
-    db.session.add(new_user)
-    db.session.commit()
-    return APIResponse('success', 200, str(new_user)).json()
+    new_user = new_user.as_dict()
+    del new_user['password']
+    return APIResponse('success', 200, new_user).json()
 
 
 @api_views.route('/login', methods=['POST'])
@@ -71,18 +81,24 @@ def login_api():
     req_data = request.form
 
     if len(set(req_data.keys()).intersection(set(['password', 'email']))) != 2:
-        return jsonify({'msg': '필수파라미터 누락.'}), 200
+        return APIResponse('필수파라미터 누락.', 422).json()
 
     login_user = User.query.filter_by(email=req_data.get('email')).first()
-    print(login_user.password)
+    if not login_user:
+        return APIResponse('id/pw 오류', 401, ).json()
+
     if not check_password_hash(login_user.password, req_data.get('password')):
-        return jsonify({'msg': 'id/pw 오류'})
+        return APIResponse('id/pw 오류', 401,).json()
 
     a_token = create_jwt_access_token(login_user.id)
     r_token = create_jwt_refresh_token(login_user.id)
-    print("access_token : {}".format(a_token))
-    print("refresh_token : {}".format(r_token))
-    return APIResponse('success', 200, data={'access_token': a_token, 'refresh_token': r_token}).json()
+
+    if a_token and r_token:
+        print("access_token : {}".format(a_token))
+        print("refresh_token : {}".format(r_token))
+        return APIResponse('success', 200, data={'access_token': a_token, 'refresh_token': r_token}).json()
+    else:
+        return APIResponse('fail', 500).json()
 
 
 @api_views.route('/access-token', methods=['GET'])
@@ -108,11 +124,13 @@ def logout_api():
     from flask import g
     print('g.userid : {}'.format(g.userid))
 
-    # User.query.filter_by(id=123).delete()
     result = Token.query.filter_by(userid=g.userid).delete()
     print("result : {}".format(result))
-    db.session.commit()
-    return APIResponse('deleted', 200, {'userid': g.userid}).json()
+    if result:
+        db.session.commit()
+        return APIResponse('logout success.', 200, {'userid': g.userid}).json()
+    else:
+        return APIResponse('logout fail', 200, {'userid': g.userid}).json()
 
 
 @api_views.route('/user/<string:userid>', methods=['GET'])
@@ -122,11 +140,13 @@ def user_api(userid=None):
         print('userid : {}'.format(userid))
         user = User.query.filter_by(id=userid).first()
         if user:
-            return jsonify({'msg': 'success.', 'data': '{}'.format(user)})
+            user = user.as_dict()
+            del user['password']
+            return APIResponse('success', 200, user).json()
         else:
-            return jsonify({'msg': 'search fail.'})
+            return APIResponse('search fail', 200).json()
     else:
-        return jsonify({'msg': 'fail'})
+        return APIResponse('필수 파라미터 누락', 422).json()
 
 
 @api_views.route('/orders/<string:userid>')
@@ -135,11 +155,13 @@ def order_api(userid=None):
     if userid:
         print("userid : {}".format(userid))
         orders = Order.query.filter_by(userid=userid).all()
+        res = []
         for order in orders:
-            print(order)
-        return jsonify({'orders': '{}'.format(len(orders))})
+            res.append(order.as_dict())
+
+        return APIResponse('success', 200, res).json()
     else:
-        return jsonify({'msg': 'fail'})
+        return APIResponse('필수 파라미터 누락', 422).json()
 
 
 @api_views.route('/users', methods=['GET'])
@@ -174,9 +196,9 @@ def get_users():
 
     res = {}
     for idx, user in enumerate(users):
-        res.update({idx: str(user)})
+        res.update({idx: user.__str__()})
 
-    return jsonify({'msg': 'success', 'users': res})
+    return APIResponse('success', 200, res).json()
 
 
 @api_views.route('/order', methods=['POST'])

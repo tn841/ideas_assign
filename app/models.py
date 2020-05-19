@@ -5,6 +5,9 @@ db = SQLAlchemy()
 
 
 class User(db.Model):
+    __table_args__ = (
+        db.UniqueConstraint('email', name='unique_email_commit'),
+    )
     id = db.Column(db.Integer, primary_key=True, unique=True)
     name = db.Column(db.String(20), nullable=False)
     nickname = db.Column(db.String(30), nullable=False)
@@ -20,6 +23,8 @@ class User(db.Model):
         return 'id: {}, name: {}, nickname: {}, password: {}, phone: {}, email: {}, gender: {}'.\
             format(self.id, self.name, self.nickname, self.password, self.phone, self.email, self.gender)
 
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
 
 class Order(db.Model):
     orderid = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -32,6 +37,13 @@ class Order(db.Model):
     def __repr__(self):
         return '<Order %r>' % self.orderid
 
+    def __str__(self):
+        return 'orderid: {}, productname: {}, transdate: {}, userid: {}'\
+            .format(self.orderid, self.productname, self.transdate, self.userid)
+
+    def as_dict(self):
+        return {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
 
 class Token(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -41,3 +53,5 @@ class Token(db.Model):
 
     def __repr__(self):
         return '<Token %r>' % self.id
+
+

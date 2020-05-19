@@ -44,6 +44,7 @@ def create_jwt_refresh_token(userid):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
+
         print(e.orig.args)
         if e.orig.args[0] == 1062:
             issued_token = Token.query.filter_by(userid=userid).first()
