@@ -31,14 +31,15 @@ DROP TABLE IF EXISTS `order`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!50503 SET character_set_client = utf8mb4 */;
 CREATE TABLE `order` (
-  `orderid` int(11) NOT NULL AUTO_INCREMENT=100000000000,
-  `productname` varchar(100) COLLATE utf8_unicode_ci NOT NULL,
+  `orderid` varchar(12) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `productname` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
   `transdate` datetime NOT NULL,
   `userid` int(11) NOT NULL,
   PRIMARY KEY (`orderid`),
+  UNIQUE KEY `orderid` (`orderid`),
   KEY `userid` (`userid`),
   CONSTRAINT `order_ibfk_1` FOREIGN KEY (`userid`) REFERENCES `user` (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
@@ -51,4 +52,4 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2020-05-19 22:19:43
+-- Dump completed on 2020-05-19 23:23:00
